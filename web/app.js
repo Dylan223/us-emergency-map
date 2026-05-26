@@ -1,75 +1,94 @@
-// U.S. Emergency Map — frontend logic
-// Loads web/data/events.geojson and renders an interactive Leaflet map.
+// =========================================================================
+// U.S. Emergency Map  ·  v2
+// Loads web/data/events.geojson and renders an interactive HUD-style map.
+// =========================================================================
 
 const DATA_URL = "data/events.geojson";
 
-// --------------------------------------------------------------------------- //
-// Color palette by category and severity                                      //
-// --------------------------------------------------------------------------- //
+// --------------------------------------------------------------------------
+// Palette — keep these in sync with style.css custom properties.
+// --------------------------------------------------------------------------
 const CATEGORY_META = {
-  tornado:      { color: "#ef4444", label: "Tornado" },
-  hurricane:    { color: "#a855f7", label: "Hurricane / Tropical" },
-  severe_storm: { color: "#f59e0b", label: "Severe Storm" },
-  flood:        { color: "#3b82f6", label: "Flood" },
-  fire_weather: { color: "#f97316", label: "Fire Weather" },
-  winter:       { color: "#7dd3fc", label: "Winter" },
-  heat:         { color: "#dc2626", label: "Heat" },
-  weather:      { color: "#94a3b8", label: "Other Weather" },
-  earthquake:   { color: "#10b981", label: "Earthquake" },
+  tornado:      { color: "#ff4d6d", label: "Tornado",        short: "Tornado"  },
+  hurricane:    { color: "#c084fc", label: "Hurricane",      short: "Tropical" },
+  severe_storm: { color: "#fbbf24", label: "Severe storm",   short: "Severe"   },
+  flood:        { color: "#00d4ff", label: "Flood",          short: "Flood"    },
+  fire_weather: { color: "#fb923c", label: "Fire weather",   short: "Fire"     },
+  winter:       { color: "#93c5fd", label: "Winter",         short: "Winter"   },
+  heat:         { color: "#f87171", label: "Heat",           short: "Heat"     },
+  weather:      { color: "#94a3b8", label: "Other weather",  short: "Other"    },
+  earthquake:   { color: "#34d399", label: "Earthquake",     short: "Quake"    },
 };
 
 const SEVERITY_META = {
-  extreme:  { color: "#dc2626", label: "Extreme" },
-  severe:   { color: "#f97316", label: "Severe" },
-  moderate: { color: "#facc15", label: "Moderate" },
-  minor:    { color: "#10b981", label: "Minor" },
-  unknown:  { color: "#94a3b8", label: "Unknown" },
+  extreme:  { color: "#ff4d6d", label: "Extreme",  tier: "extreme",  rank: 4 },
+  severe:   { color: "#fbbf24", label: "Severe",   tier: "severe",   rank: 3 },
+  moderate: { color: "#00d4ff", label: "Moderate", tier: "moderate", rank: 2 },
+  minor:    { color: "#34d399", label: "Minor",    tier: "minor",    rank: 1 },
+  unknown:  { color: "#6b7884", label: "Unknown",  tier: "unknown",  rank: 0 },
 };
 
-// --------------------------------------------------------------------------- //
-// State                                                                       //
-// --------------------------------------------------------------------------- //
+const SEVERITY_ORDER = ["extreme", "severe", "moderate", "minor", "unknown"];
+
+// --------------------------------------------------------------------------
+// State
+// --------------------------------------------------------------------------
 const state = {
   features: [],
   enabledCategories: new Set(),
   enabledSeverities: new Set(),
   layers: { points: null, polygons: null },
+  generatedAt: null,
 };
 
-// --------------------------------------------------------------------------- //
-// Map init                                                                    //
-// --------------------------------------------------------------------------- //
+// --------------------------------------------------------------------------
+// Map init
+// --------------------------------------------------------------------------
 const map = L.map("map", {
-  center: [39.5, -98.5], // continental US center
+  center: [39.5, -98.5],
   zoom: 4,
   minZoom: 3,
   worldCopyJump: true,
   zoomControl: false,
+  attributionControl: false,
 });
 L.control.zoom({ position: "bottomright" }).addTo(map);
+L.control.attribution({ position: "bottomright", prefix: false })
+  .addAttribution(
+    '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>' +
+    ' &copy; <a href="https://carto.com/attributions">CARTO</a>'
+  )
+  .addTo(map);
 
-// CartoDB Dark Matter — free, attribution-only.
 L.tileLayer(
-  "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
-  {
-    attribution:
-      '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' +
-      ' &copy; <a href="https://carto.com/attributions">CARTO</a>',
-    subdomains: "abcd",
-    maxZoom: 19,
-  }
+  "https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png",
+  { subdomains: "abcd", maxZoom: 19 }
+).addTo(map);
+L.tileLayer(
+  "https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png",
+  { subdomains: "abcd", maxZoom: 19, opacity: 0.6 }
 ).addTo(map);
 
 state.layers.polygons = L.layerGroup().addTo(map);
 state.layers.points = L.markerClusterGroup({
   disableClusteringAtZoom: 8,
   spiderfyOnMaxZoom: true,
-  maxClusterRadius: 50,
+  maxClusterRadius: 48,
+  showCoverageOnHover: false,
+  iconCreateFunction: (cluster) => {
+    const n = cluster.getChildCount();
+    const size = n < 10 ? 30 : n < 100 ? 36 : 44;
+    return L.divIcon({
+      html: `<div>${n}</div>`,
+      className: `marker-cluster marker-cluster-${n < 10 ? "small" : n < 100 ? "medium" : "large"}`,
+      iconSize: [size, size],
+    });
+  },
 }).addTo(map);
 
-// --------------------------------------------------------------------------- //
-// Load + render                                                               //
-// --------------------------------------------------------------------------- //
+// --------------------------------------------------------------------------
+// Load + render
+// --------------------------------------------------------------------------
 fetch(DATA_URL, { cache: "no-store" })
   .then((r) => {
     if (!r.ok) throw new Error(`Failed to load ${DATA_URL}: ${r.status}`);
@@ -77,9 +96,8 @@ fetch(DATA_URL, { cache: "no-store" })
   })
   .then((fc) => {
     state.features = fc.features || [];
-    document.getElementById("last-updated").textContent =
-      formatRelative(fc.generated_at);
-
+    state.generatedAt = fc.generated_at || null;
+    updateLastUpdated();
     buildFilters();
     renderEvents();
   })
@@ -87,23 +105,22 @@ fetch(DATA_URL, { cache: "no-store" })
     console.error(err);
     document.getElementById("last-updated").textContent = "load failed";
     document.getElementById("event-count").textContent = "0";
-    alert(
-      "Could not load events.geojson. If you just deployed, the first ingest " +
-      "may not have run yet — trigger the GitHub Action manually under " +
-      "Actions → Refresh emergency data → Run workflow."
-    );
   });
 
-// --------------------------------------------------------------------------- //
-// Filter UI                                                                   //
-// --------------------------------------------------------------------------- //
+setInterval(updateLastUpdated, 30 * 1000);
+setInterval(updateClock, 1000);
+updateClock();
+
+// --------------------------------------------------------------------------
+// Filter UI (left sidebar)
+// --------------------------------------------------------------------------
 function buildFilters() {
   const catCounts = countBy(state.features, (f) => f.properties.category);
   const sevCounts = countBy(state.features, (f) => f.properties.severity);
 
+  // Categories
   const catContainer = document.getElementById("category-filters");
   catContainer.innerHTML = "";
-  // Show every category that has at least one event, sorted by count.
   Object.entries(catCounts)
     .sort((a, b) => b[1] - a[1])
     .forEach(([cat, count]) => {
@@ -119,9 +136,10 @@ function buildFilters() {
       );
     });
 
+  // Severities
   const sevContainer = document.getElementById("severity-filters");
   sevContainer.innerHTML = "";
-  ["extreme", "severe", "moderate", "minor", "unknown"].forEach((sev) => {
+  SEVERITY_ORDER.forEach((sev) => {
     if (!(sev in sevCounts)) return;
     state.enabledSeverities.add(sev);
     sevContainer.appendChild(
@@ -152,6 +170,7 @@ function filterRow({ key, color, label, count, set }) {
   const dot = document.createElement("span");
   dot.className = "dot";
   dot.style.background = color;
+  dot.style.color = color;  // for the box-shadow currentColor glow
 
   const labelEl = document.createElement("span");
   labelEl.className = "label";
@@ -159,103 +178,180 @@ function filterRow({ key, color, label, count, set }) {
 
   const countEl = document.createElement("span");
   countEl.className = "count";
-  countEl.textContent = count;
+  countEl.textContent = count.toLocaleString();
 
   row.append(checkbox, dot, labelEl, countEl);
   return row;
 }
 
-// --------------------------------------------------------------------------- //
-// Render events                                                               //
-// --------------------------------------------------------------------------- //
+// --------------------------------------------------------------------------
+// Render events
+// --------------------------------------------------------------------------
 function renderEvents() {
   state.layers.points.clearLayers();
   state.layers.polygons.clearLayers();
 
-  let shown = 0;
-  for (const feat of state.features) {
-    const p = feat.properties;
-    if (!state.enabledCategories.has(p.category)) continue;
-    if (!state.enabledSeverities.has(p.severity)) continue;
+  const visible = state.features.filter(
+    (f) =>
+      state.enabledCategories.has(f.properties.category) &&
+      state.enabledSeverities.has(f.properties.severity)
+  );
 
-    addFeature(feat);
-    shown++;
-  }
-  document.getElementById("event-count").textContent = shown.toLocaleString();
+  for (const feat of visible) addFeature(feat);
+
+  document.getElementById("event-count").textContent =
+    visible.length.toLocaleString();
+
+  updateSeverityLadder(visible);
+  updateBreakdown(visible);
 }
 
 function addFeature(feat) {
   const p = feat.properties;
-  const color = CATEGORY_META[p.category]?.color || "#94a3b8";
-  const sevColor = SEVERITY_META[p.severity]?.color || "#94a3b8";
+  const cat = CATEGORY_META[p.category] || { color: "#94a3b8" };
   const geom = feat.geometry;
 
-  // Polygon outlines.
+  // Polygon outline (with marching-ants for Severe+).
   if (geom && (geom.type === "Polygon" || geom.type === "MultiPolygon")) {
+    const cls =
+      p.severity === "extreme" ? "poly-extreme" :
+      p.severity === "severe"  ? "poly-severe"  :
+                                 "poly-static";
     const poly = L.geoJSON(geom, {
       style: {
-        color: color,
-        weight: 1,
-        fillColor: color,
-        fillOpacity: 0.18,
+        color: cat.color,
+        weight: 1.2,
+        fillColor: cat.color,
+        fillOpacity: p.severity === "extreme" ? 0.18 : 0.10,
+        className: cls,
       },
     });
-    poly.bindPopup(() => popupHtml(p));
+    poly.bindPopup(() => popupHtml(p), { maxWidth: 360 });
     state.layers.polygons.addLayer(poly);
   }
 
-  // Marker (representative point).
+  // Representative-point marker.
   const rep = p.rep_point || (geom.type === "Point" ? geom.coordinates : null);
   if (!rep) return;
   const [lng, lat] = rep;
 
-  const radius = sizeFor(p);
-  const marker = L.circleMarker([lat, lng], {
-    radius,
-    color: "#0e1117",
-    weight: 1,
-    fillColor: color,
-    fillOpacity: 0.9,
+  const tier = SEVERITY_META[p.severity]?.tier || "unknown";
+  const isQuake = p.category === "earthquake";
+  const sizePx = isQuake && typeof p.magnitude === "number"
+    ? Math.max(6, Math.min(20, 4 + p.magnitude * 2.2))
+    : null;
+
+  const html = `
+    <div class="event-marker tier-${tier}${isQuake ? " is-quake" : ""}"
+         style="--cat:${cat.color};${sizePx ? `--size:${sizePx}px;` : ""}"
+         title="${escapeAttr(p.title || p.event_type || "Event")}">
+      <span class="ring"></span>
+      ${tier === "extreme" ? '<span class="ring ring-2"></span>' : ""}
+      <span class="core"></span>
+    </div>
+  `;
+  const icon = L.divIcon({
+    html,
+    className: "",
+    iconSize: [24, 24],
+    iconAnchor: [12, 12],
   });
+  const marker = L.marker([lat, lng], { icon, riseOnHover: true });
   marker.bindPopup(() => popupHtml(p), { maxWidth: 360 });
   state.layers.points.addLayer(marker);
 }
 
-function sizeFor(p) {
-  // Earthquakes scale by magnitude.
-  if (p.category === "earthquake" && typeof p.magnitude === "number") {
-    return Math.max(4, Math.min(18, 3 + p.magnitude * 2));
+// --------------------------------------------------------------------------
+// HUD panels
+// --------------------------------------------------------------------------
+function updateSeverityLadder(features) {
+  const counts = countBy(features, (f) => f.properties.severity);
+  const total = features.length || 1;
+
+  const container = document.getElementById("severity-ladder");
+  container.innerHTML = "";
+
+  let highestActive = null;
+  for (const sev of SEVERITY_ORDER) {
+    if ((counts[sev] || 0) > 0 && sev !== "unknown") { highestActive = sev; break; }
   }
-  // Others scale by severity.
-  return { extreme: 10, severe: 8, moderate: 6, minor: 5, unknown: 5 }[
-    p.severity
-  ] || 5;
+
+  for (const sev of SEVERITY_ORDER) {
+    const meta = SEVERITY_META[sev];
+    const count = counts[sev] || 0;
+    if (count === 0 && sev !== highestActive) continue; // hide empties
+
+    const row = document.createElement("div");
+    row.className = "sev-row";
+    if (sev === highestActive) row.classList.add("is-active");
+    row.style.color = meta.color;
+    row.innerHTML = `
+      <span class="sev-pip"></span>
+      <span class="sev-label">${meta.label}</span>
+      <span class="sev-count">${count.toLocaleString()}</span>
+    `;
+    container.appendChild(row);
+  }
+
+  if (!container.children.length) {
+    container.innerHTML = `<div class="sev-row"><span></span><span class="sev-label" style="color:var(--text-faint)">No active events</span><span></span></div>`;
+  }
 }
 
+function updateBreakdown(features) {
+  const counts = countBy(features, (f) => f.properties.category);
+  const entries = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 8);
+  const max = entries.length ? entries[0][1] : 1;
+
+  const container = document.getElementById("breakdown-bars");
+  container.innerHTML = "";
+
+  if (!entries.length) {
+    container.innerHTML = `<div class="bd-row"><span class="bd-name" style="color:var(--text-faint)">No active events</span><span></span><span></span></div>`;
+    return;
+  }
+
+  for (const [cat, count] of entries) {
+    const meta = CATEGORY_META[cat] || { color: "#94a3b8", short: cat };
+    const pct = Math.round((count / max) * 100);
+    const row = document.createElement("div");
+    row.className = "bd-row";
+    row.style.color = meta.color;
+    row.innerHTML = `
+      <span class="bd-name">${meta.short}</span>
+      <span class="bd-track"><span class="bd-fill" style="width:${pct}%"></span></span>
+      <span class="bd-count">${count.toLocaleString()}</span>
+    `;
+    container.appendChild(row);
+  }
+}
+
+// --------------------------------------------------------------------------
+// Popup
+// --------------------------------------------------------------------------
 function popupHtml(p) {
   const catMeta = CATEGORY_META[p.category] || { color: "#94a3b8", label: p.category };
   const sevMeta = SEVERITY_META[p.severity] || { color: "#94a3b8", label: p.severity };
-
   const desc = (p.description || "").slice(0, 1200);
   const time = p.started_at ? new Date(p.started_at).toLocaleString() : "";
 
   return `
     <div class="popup-title">${escapeHtml(p.title || p.event_type || "Event")}</div>
     <div class="popup-badges">
-      <span class="badge" style="background:${catMeta.color}26;color:${catMeta.color};">${catMeta.label}</span>
-      <span class="badge" style="background:${sevMeta.color}26;color:${sevMeta.color};">${sevMeta.label}</span>
+      <span class="badge" style="background:${catMeta.color}26;color:${catMeta.color};">${escapeHtml(catMeta.label)}</span>
+      <span class="badge" style="background:${sevMeta.color}26;color:${sevMeta.color};">${escapeHtml(sevMeta.label)}</span>
       <span class="badge" style="background:#1f2937;color:#b1bccc;">${escapeHtml(p.source || "")}</span>
     </div>
     ${p.area ? `<div class="popup-area">${escapeHtml(p.area)}</div>` : ""}
     ${time ? `<div class="popup-area">Started ${escapeHtml(time)}</div>` : ""}
     ${desc ? `<div class="popup-desc">${escapeHtml(desc)}</div>` : ""}
-    ${p.url ? `<a class="popup-link" href="${escapeAttr(p.url)}" target="_blank" rel="noopener">View source →</a>` : ""}
+    ${p.url ? `<a class="popup-link" href="${escapeAttr(p.url)}" target="_blank" rel="noopener">VIEW SOURCE →</a>` : ""}
   `;
 }
 
-// --------------------------------------------------------------------------- //
-// Helpers                                                                     //
-// --------------------------------------------------------------------------- //
+// --------------------------------------------------------------------------
+// Helpers
+// --------------------------------------------------------------------------
 function countBy(arr, keyFn) {
   const out = {};
   for (const item of arr) {
@@ -271,33 +367,42 @@ function escapeHtml(s) {
     "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
   })[c]);
 }
-
 function escapeAttr(s) {
   return escapeHtml(s).replace(/javascript:/gi, "");
 }
 
-function formatRelative(iso) {
-  if (!iso) return "—";
-  const then = new Date(iso).getTime();
-  if (Number.isNaN(then)) return "—";
+function updateLastUpdated() {
+  const el = document.getElementById("last-updated");
+  if (!state.generatedAt) { el.textContent = "—"; return; }
+  const then = new Date(state.generatedAt).getTime();
+  if (Number.isNaN(then)) { el.textContent = "—"; return; }
   const secs = Math.max(0, Math.floor((Date.now() - then) / 1000));
-  if (secs < 60) return `${secs}s ago`;
-  const mins = Math.floor(secs / 60);
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return `${Math.floor(hours / 24)}d ago`;
+  let s;
+  if (secs < 60) s = `${secs}s ago`;
+  else if (secs < 3600) s = `${Math.floor(secs / 60)}m ago`;
+  else if (secs < 86400) s = `${Math.floor(secs / 3600)}h ago`;
+  else s = `${Math.floor(secs / 86400)}d ago`;
+  el.textContent = s;
 }
 
-// --------------------------------------------------------------------------- //
-// Sidebar toggle (mobile) + repo link                                         //
-// --------------------------------------------------------------------------- //
+function updateClock() {
+  const el = document.getElementById("clock-time");
+  if (!el) return;
+  const d = new Date();
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mm = String(d.getMinutes()).padStart(2, "0");
+  const tz = (d.toLocaleTimeString("en-US", { timeZoneName: "short" })
+              .split(" ").pop() || "").slice(0, 4);
+  el.textContent = `${hh}:${mm} ${tz}`;
+}
+
+// --------------------------------------------------------------------------
+// Sidebar toggle (mobile) + auto repo link
+// --------------------------------------------------------------------------
 document.getElementById("sidebar-toggle").addEventListener("click", () => {
   document.getElementById("sidebar").classList.toggle("open");
 });
 
-// Auto-populate the "View source" footer link with the GitHub repo URL
-// inferred from window.location (works on GitHub Pages and Vercel).
 (() => {
   const a = document.getElementById("repo-link");
   const host = window.location.hostname;

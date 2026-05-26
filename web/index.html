@@ -6,6 +6,11 @@
   <title>U.S. Emergency Map · Live disasters & alerts</title>
   <meta name="description" content="Live map of U.S. weather alerts, earthquakes, and emergency events. Updated every 15 minutes from NOAA and USGS." />
 
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" />
+
   <!-- Leaflet -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
         integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
@@ -18,14 +23,18 @@
 
 <div id="app">
 
-  <aside id="sidebar" aria-label="Filters and legend">
-    <header>
-      <h1>⚡ U.S. Emergency Map</h1>
-      <p class="subtitle">Live disasters, weather alerts & earthquakes</p>
-      <p class="meta">
-        <span id="event-count">—</span> active events ·
-        updated <span id="last-updated">—</span>
-      </p>
+  <!-- =================== Left Sidebar =================== -->
+  <aside id="sidebar" aria-label="Filters and controls">
+    <header class="brand">
+      <div class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="22" height="22">
+          <path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <div class="brand-text">
+        <h1>EMERGENCY<span class="amber">MAP</span></h1>
+        <p class="subtitle">U.S. real-time disaster intelligence</p>
+      </div>
     </header>
 
     <section class="panel">
@@ -41,20 +50,56 @@
     <section class="panel">
       <h2>Sources</h2>
       <ul class="sources">
-        <li><a href="https://www.weather.gov/" target="_blank" rel="noopener">NOAA / NWS</a> — active alerts</li>
-        <li><a href="https://earthquake.usgs.gov/" target="_blank" rel="noopener">USGS</a> — quakes past 24h</li>
+        <li>
+          <span class="source-dot" style="background:var(--accent)"></span>
+          <a href="https://www.weather.gov/" target="_blank" rel="noopener">NOAA / NWS</a>
+          <span class="source-meta">active alerts</span>
+        </li>
+        <li>
+          <span class="source-dot" style="background:var(--accent-2)"></span>
+          <a href="https://earthquake.usgs.gov/" target="_blank" rel="noopener">USGS</a>
+          <span class="source-meta">quakes · 24h</span>
+        </li>
       </ul>
     </section>
 
     <footer>
       <p>Data refreshes every 15 minutes via GitHub Actions. Built as an open-source portfolio project.</p>
-      <p><a id="repo-link" href="#" target="_blank" rel="noopener">View source on GitHub →</a></p>
+      <p><a id="repo-link" href="#" target="_blank" rel="noopener">VIEW SOURCE ON GITHUB →</a></p>
     </footer>
   </aside>
 
+  <!-- =================== Map + Overlays =================== -->
   <main id="map-wrap">
     <div id="map" role="application" aria-label="Interactive map of U.S. emergency events"></div>
+
     <button id="sidebar-toggle" aria-label="Toggle sidebar">☰</button>
+
+    <!-- Top-right HUD: LIVE indicator + main metrics + severity ladder -->
+    <div class="hud hud-top-right" id="status-panel">
+      <div class="hud-header">
+        <span class="live-dot" aria-hidden="true"></span>
+        <span class="hud-label">LIVE</span>
+        <span class="hud-clock" id="clock-time">—</span>
+      </div>
+      <div class="hud-divider"></div>
+      <div class="big-stat">
+        <span class="big-stat-value" id="event-count">—</span>
+        <span class="big-stat-label">Active events</span>
+      </div>
+      <div class="hud-meta">
+        <span>Updated <span id="last-updated">—</span></span>
+      </div>
+      <div class="hud-divider"></div>
+      <h3 class="hud-section-title">Severity</h3>
+      <div class="severity-ladder" id="severity-ladder"></div>
+    </div>
+
+    <!-- Bottom-left HUD: category breakdown -->
+    <div class="hud hud-bottom-left" id="breakdown-panel">
+      <h3 class="hud-section-title">Active by category</h3>
+      <div class="breakdown" id="breakdown-bars"></div>
+    </div>
   </main>
 
 </div>
