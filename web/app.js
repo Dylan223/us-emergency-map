@@ -1,11 +1,8 @@
-// U.S. Emergency Map  ·  v3
-// Artistic tile style: near-black land, animated cyan ocean
+// U.S. Emergency Map  ·  v4
+// CartoDB Dark Matter tiles (no API key needed) + CSS animated ocean bg
 
 const DATA_URL = "data/events.geojson";
 
-// --------------------------------------------------------------------------
-// Palette
-// --------------------------------------------------------------------------
 const CATEGORY_META = {
   tornado:      { color: "#ff4d6d", label: "Tornado",        short: "Tornado"  },
   hurricane:    { color: "#c084fc", label: "Hurricane",      short: "Tropical" },
@@ -28,9 +25,6 @@ const SEVERITY_META = {
 
 const SEVERITY_ORDER = ["extreme", "severe", "moderate", "minor", "unknown"];
 
-// --------------------------------------------------------------------------
-// State
-// --------------------------------------------------------------------------
 const state = {
   features: [],
   enabledCategories: new Set(),
@@ -40,7 +34,7 @@ const state = {
 };
 
 // --------------------------------------------------------------------------
-// Map init
+// Map — CartoDB Dark Matter, no API key required
 // --------------------------------------------------------------------------
 const map = L.map("map", {
   center: [39.5, -98.5],
@@ -49,47 +43,25 @@ const map = L.map("map", {
   worldCopyJump: true,
   zoomControl: false,
   attributionControl: false,
+  // Set map background to our ocean color so it shows between tiles
+  backgroundColor: "#03111a",
 });
 
 L.control.zoom({ position: "bottomright" }).addTo(map);
 L.control.attribution({ position: "bottomright", prefix: false })
-  .addAttribution(
-    '&copy; <a href="https://stamen.com">Stamen Design</a>' +
-    ' &copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>'
-  )
+  .addAttribution('&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/attributions">CARTO</a>')
   .addTo(map);
 
-// --------------------------------------------------------------------------
-// Tile layers — artistic style
-//
-// Layer 1 (base): Stadia Stamen Toner — high-contrast black land / white sea.
-//   CSS then crushes brightness + desaturates so land → near-black,
-//   sea → near-transparent so the canvas ocean shows through.
-//
-// Layer 2 (labels): Toner Labels only, at reduced opacity.
-// --------------------------------------------------------------------------
-
-// Base: Stamen Toner (black land, white sea — perfect for our CSS filter trick)
+// CartoDB Dark Matter — dark land, slightly lighter sea. Free, no key needed.
 L.tileLayer(
-  "https://tiles.stadiamaps.com/tiles/stamen_toner/{z}/{x}/{y}{r}.png",
-  {
-    subdomains: "abcd",
-    maxZoom: 20,
-    opacity: 1,
-    // className targets this layer's canvas specifically in newer Leaflet
-    className: "tile-base",
-  }
+  "https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png",
+  { subdomains: "abcd", maxZoom: 19 }
 ).addTo(map);
 
-// Labels only — sits on top, slightly transparent
+// Labels on top at reduced opacity
 L.tileLayer(
-  "https://tiles.stadiamaps.com/tiles/stamen_toner_labels/{z}/{x}/{y}{r}.png",
-  {
-    subdomains: "abcd",
-    maxZoom: 20,
-    opacity: 0.35,
-    className: "tile-labels",
-  }
+  "https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png",
+  { subdomains: "abcd", maxZoom: 19, opacity: 0.55 }
 ).addTo(map);
 
 state.layers.polygons = L.layerGroup().addTo(map);
@@ -111,13 +83,10 @@ state.layers.points = L.markerClusterGroup({
 }).addTo(map);
 
 // --------------------------------------------------------------------------
-// Load + render
+// Data
 // --------------------------------------------------------------------------
 fetch(DATA_URL, { cache: "no-store" })
-  .then((r) => {
-    if (!r.ok) throw new Error(`Failed to load ${DATA_URL}: ${r.status}`);
-    return r.json();
-  })
+  .then((r) => { if (!r.ok) throw new Error(`${r.status}`); return r.json(); })
   .then((fc) => {
     state.features = fc.features || [];
     state.generatedAt = fc.generated_at || null;
@@ -131,12 +100,12 @@ fetch(DATA_URL, { cache: "no-store" })
     document.getElementById("event-count").textContent = "0";
   });
 
-setInterval(updateLastUpdated, 30 * 1000);
+setInterval(updateLastUpdated, 30000);
 setInterval(updateClock, 1000);
 updateClock();
 
 // --------------------------------------------------------------------------
-// Filter UI
+// Filters
 // --------------------------------------------------------------------------
 function buildFilters() {
   const catCounts = countBy(state.features, (f) => f.properties.category);
@@ -144,86 +113,62 @@ function buildFilters() {
 
   const catContainer = document.getElementById("category-filters");
   catContainer.innerHTML = "";
-  Object.entries(catCounts)
-    .sort((a, b) => b[1] - a[1])
-    .forEach(([cat, count]) => {
-      state.enabledCategories.add(cat);
-      catContainer.appendChild(
-        filterRow({
-          key: cat,
-          color: CATEGORY_META[cat]?.color || "#94a3b8",
-          label: CATEGORY_META[cat]?.label || cat,
-          count,
-          set: state.enabledCategories,
-        })
-      );
-    });
+  Object.entries(catCounts).sort((a, b) => b[1] - a[1]).forEach(([cat, count]) => {
+    state.enabledCategories.add(cat);
+    catContainer.appendChild(filterRow({
+      key: cat, color: CATEGORY_META[cat]?.color || "#94a3b8",
+      label: CATEGORY_META[cat]?.label || cat, count, set: state.enabledCategories,
+    }));
+  });
 
   const sevContainer = document.getElementById("severity-filters");
   sevContainer.innerHTML = "";
   SEVERITY_ORDER.forEach((sev) => {
     if (!(sev in sevCounts)) return;
     state.enabledSeverities.add(sev);
-    sevContainer.appendChild(
-      filterRow({
-        key: sev,
-        color: SEVERITY_META[sev].color,
-        label: SEVERITY_META[sev].label,
-        count: sevCounts[sev],
-        set: state.enabledSeverities,
-      })
-    );
+    sevContainer.appendChild(filterRow({
+      key: sev, color: SEVERITY_META[sev].color,
+      label: SEVERITY_META[sev].label, count: sevCounts[sev], set: state.enabledSeverities,
+    }));
   });
 }
 
 function filterRow({ key, color, label, count, set }) {
   const row = document.createElement("label");
   row.className = "filter-row";
-
   const checkbox = document.createElement("input");
   checkbox.type = "checkbox";
   checkbox.checked = true;
   checkbox.addEventListener("change", () => {
-    if (checkbox.checked) set.add(key);
-    else set.delete(key);
+    if (checkbox.checked) set.add(key); else set.delete(key);
     renderEvents();
   });
-
   const dot = document.createElement("span");
   dot.className = "dot";
   dot.style.background = color;
   dot.style.color = color;
-
   const labelEl = document.createElement("span");
   labelEl.className = "label";
   labelEl.textContent = label;
-
   const countEl = document.createElement("span");
   countEl.className = "count";
   countEl.textContent = count.toLocaleString();
-
   row.append(checkbox, dot, labelEl, countEl);
   return row;
 }
 
 // --------------------------------------------------------------------------
-// Render events
+// Render
 // --------------------------------------------------------------------------
 function renderEvents() {
   state.layers.points.clearLayers();
   state.layers.polygons.clearLayers();
-
   const visible = state.features.filter(
-    (f) =>
-      state.enabledCategories.has(f.properties.category) &&
-      state.enabledSeverities.has(f.properties.severity)
+    (f) => state.enabledCategories.has(f.properties.category) &&
+            state.enabledSeverities.has(f.properties.severity)
   );
-
   for (const feat of visible) addFeature(feat);
-
-  document.getElementById("event-count").textContent =
-    visible.length.toLocaleString();
-
+  document.getElementById("event-count").textContent = visible.length.toLocaleString();
   updateSeverityLadder(visible);
   updateBreakdown(visible);
 }
@@ -234,18 +179,9 @@ function addFeature(feat) {
   const geom = feat.geometry;
 
   if (geom && (geom.type === "Polygon" || geom.type === "MultiPolygon")) {
-    const cls =
-      p.severity === "extreme" ? "poly-extreme" :
-      p.severity === "severe"  ? "poly-severe"  :
-                                 "poly-static";
+    const cls = p.severity === "extreme" ? "poly-extreme" : p.severity === "severe" ? "poly-severe" : "poly-static";
     const poly = L.geoJSON(geom, {
-      style: {
-        color: cat.color,
-        weight: 1.2,
-        fillColor: cat.color,
-        fillOpacity: p.severity === "extreme" ? 0.18 : 0.10,
-        className: cls,
-      },
+      style: { color: cat.color, weight: 1.2, fillColor: cat.color, fillOpacity: p.severity === "extreme" ? 0.18 : 0.10, className: cls },
     });
     poly.bindPopup(() => popupHtml(p), { maxWidth: 360 });
     state.layers.polygons.addLayer(poly);
@@ -254,13 +190,9 @@ function addFeature(feat) {
   const rep = p.rep_point || (geom.type === "Point" ? geom.coordinates : null);
   if (!rep) return;
   const [lng, lat] = rep;
-
   const tier = SEVERITY_META[p.severity]?.tier || "unknown";
   const isQuake = p.category === "earthquake";
-  const sizePx = isQuake && typeof p.magnitude === "number"
-    ? Math.max(6, Math.min(20, 4 + p.magnitude * 2.2))
-    : null;
-
+  const sizePx = isQuake && typeof p.magnitude === "number" ? Math.max(6, Math.min(20, 4 + p.magnitude * 2.2)) : null;
   const html = `
     <div class="event-marker tier-${tier}${isQuake ? " is-quake" : ""}"
          style="--cat:${cat.color};${sizePx ? `--size:${sizePx}px;` : ""}"
@@ -268,8 +200,7 @@ function addFeature(feat) {
       <span class="ring"></span>
       ${tier === "extreme" ? '<span class="ring ring-2"></span>' : ""}
       <span class="core"></span>
-    </div>
-  `;
+    </div>`;
   const icon = L.divIcon({ html, className: "", iconSize: [24, 24], iconAnchor: [12, 12] });
   const marker = L.marker([lat, lng], { icon, riseOnHover: true });
   marker.bindPopup(() => popupHtml(p), { maxWidth: 360 });
@@ -277,35 +208,27 @@ function addFeature(feat) {
 }
 
 // --------------------------------------------------------------------------
-// HUD panels
+// HUD
 // --------------------------------------------------------------------------
 function updateSeverityLadder(features) {
   const counts = countBy(features, (f) => f.properties.severity);
   const container = document.getElementById("severity-ladder");
   container.innerHTML = "";
-
   let highestActive = null;
   for (const sev of SEVERITY_ORDER) {
     if ((counts[sev] || 0) > 0 && sev !== "unknown") { highestActive = sev; break; }
   }
-
   for (const sev of SEVERITY_ORDER) {
     const meta = SEVERITY_META[sev];
     const count = counts[sev] || 0;
     if (count === 0 && sev !== highestActive) continue;
-
     const row = document.createElement("div");
     row.className = "sev-row";
     if (sev === highestActive) row.classList.add("is-active");
     row.style.color = meta.color;
-    row.innerHTML = `
-      <span class="sev-pip"></span>
-      <span class="sev-label">${meta.label}</span>
-      <span class="sev-count">${count.toLocaleString()}</span>
-    `;
+    row.innerHTML = `<span class="sev-pip"></span><span class="sev-label">${meta.label}</span><span class="sev-count">${count.toLocaleString()}</span>`;
     container.appendChild(row);
   }
-
   if (!container.children.length) {
     container.innerHTML = `<div class="sev-row"><span></span><span class="sev-label" style="color:var(--text-faint)">No active events</span><span></span></div>`;
   }
@@ -315,26 +238,19 @@ function updateBreakdown(features) {
   const counts = countBy(features, (f) => f.properties.category);
   const entries = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 8);
   const max = entries.length ? entries[0][1] : 1;
-
   const container = document.getElementById("breakdown-bars");
   container.innerHTML = "";
-
   if (!entries.length) {
     container.innerHTML = `<div class="bd-row"><span class="bd-name" style="color:var(--text-faint)">No active events</span><span></span><span></span></div>`;
     return;
   }
-
   for (const [cat, count] of entries) {
     const meta = CATEGORY_META[cat] || { color: "#94a3b8", short: cat };
     const pct = Math.round((count / max) * 100);
     const row = document.createElement("div");
     row.className = "bd-row";
     row.style.color = meta.color;
-    row.innerHTML = `
-      <span class="bd-name">${meta.short}</span>
-      <span class="bd-track"><span class="bd-fill" style="width:${pct}%"></span></span>
-      <span class="bd-count">${count.toLocaleString()}</span>
-    `;
+    row.innerHTML = `<span class="bd-name">${meta.short}</span><span class="bd-track"><span class="bd-fill" style="width:${pct}%"></span></span><span class="bd-count">${count.toLocaleString()}</span>`;
     container.appendChild(row);
   }
 }
@@ -347,7 +263,6 @@ function popupHtml(p) {
   const sevMeta = SEVERITY_META[p.severity] || { color: "#94a3b8", label: p.severity };
   const desc = (p.description || "").slice(0, 1200);
   const time = p.started_at ? new Date(p.started_at).toLocaleString() : "";
-
   return `
     <div class="popup-title">${escapeHtml(p.title || p.event_type || "Event")}</div>
     <div class="popup-badges">
@@ -358,8 +273,7 @@ function popupHtml(p) {
     ${p.area ? `<div class="popup-area">${escapeHtml(p.area)}</div>` : ""}
     ${time ? `<div class="popup-area">Started ${escapeHtml(time)}</div>` : ""}
     ${desc ? `<div class="popup-desc">${escapeHtml(desc)}</div>` : ""}
-    ${p.url ? `<a class="popup-link" href="${escapeAttr(p.url)}" target="_blank" rel="noopener">VIEW SOURCE →</a>` : ""}
-  `;
+    ${p.url ? `<a class="popup-link" href="${escapeAttr(p.url)}" target="_blank" rel="noopener">VIEW SOURCE →</a>` : ""}`;
 }
 
 // --------------------------------------------------------------------------
@@ -367,18 +281,11 @@ function popupHtml(p) {
 // --------------------------------------------------------------------------
 function countBy(arr, keyFn) {
   const out = {};
-  for (const item of arr) {
-    const k = keyFn(item);
-    if (!k) continue;
-    out[k] = (out[k] || 0) + 1;
-  }
+  for (const item of arr) { const k = keyFn(item); if (!k) continue; out[k] = (out[k] || 0) + 1; }
   return out;
 }
-
 function escapeHtml(s) {
-  return String(s).replace(/[&<>"']/g, (c) => ({
-    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
-  })[c]);
+  return String(s).replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[c]);
 }
 function escapeAttr(s) { return escapeHtml(s).replace(/javascript:/gi, ""); }
 
