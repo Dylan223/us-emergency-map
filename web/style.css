@@ -1,59 +1,46 @@
 /* =========================================================================
-   U.S. Emergency Map  ·  v2
-   Cyan / amber on near-black. Subtle rarity-tier animations.
+   U.S. Emergency Map  ·  v3
+   Artistic style: near-black land, animated cyan/teal ocean shimmer
    ========================================================================= */
 
 :root {
-  /* Surfaces */
-  --bg-deep:      #050709;   /* page background */
-  --bg-panel:     #0b1018;   /* panel background */
-  --bg-panel-2:   #11161e;   /* slightly raised */
-  --bg-input:     #161c26;
+  --bg-deep:      #05080a;
+  --bg-panel:     #090e14;
+  --bg-panel-2:   #0f1520;
+  --bg-input:     #141c28;
 
-  /* Borders */
-  --border:       #1a2330;
-  --border-hot:   #2a3a4f;
+  --border:       #172030;
+  --border-hot:   #243548;
 
-  /* Text */
-  --text:         #e6f0f5;
-  --text-dim:     #8a9bab;
-  --text-faint:   #4f5d70;
+  --text:         #ddeef5;
+  --text-dim:     #7a90a0;
+  --text-faint:   #3d5060;
 
-  /* Accents */
-  --accent:       #00d4ff;        /* primary cyan  */
-  --accent-2:     #fbbf24;        /* amber         */
-  --accent-glow:  rgba(0, 212, 255, 0.45);
+  --accent:       #00d4ff;
+  --accent-2:     #fbbf24;
+  --accent-glow:  rgba(0, 212, 255, 0.4);
 
-  /* Severity ramp (rarity tiers) */
+  --ocean-deep:   #03111a;
+  --ocean-mid:    #042030;
+  --ocean-shimmer:#00d4ff;
+
   --sev-extreme:  #ff4d6d;
   --sev-severe:   #fbbf24;
   --sev-moderate: #00d4ff;
   --sev-minor:    #34d399;
   --sev-unknown:  #6b7884;
 
-  /* Category palette */
-  --cat-tornado:    #ff4d6d;
-  --cat-hurricane:  #c084fc;
-  --cat-severe:     #fbbf24;
-  --cat-flood:      #00d4ff;
-  --cat-fire:       #fb923c;
-  --cat-winter:     #93c5fd;
-  --cat-heat:       #f87171;
-  --cat-weather:    #94a3b8;
-  --cat-earthquake: #34d399;
-
   --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
   --sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
-
 html, body, #app { height: 100%; width: 100%; }
 
 body {
   font-family: var(--sans);
   color: var(--text);
-  background: var(--bg-deep);
+  background: var(--ocean-deep);
   font-size: 13px;
   line-height: 1.5;
   overflow: hidden;
@@ -77,17 +64,58 @@ a:hover { text-decoration: underline; text-underline-offset: 2px; }
   border-right: 1px solid var(--border);
   overflow-y: auto;
   padding: 18px 16px 24px;
+  position: relative;
+  z-index: 600;
 }
 #sidebar::-webkit-scrollbar { width: 6px; }
 #sidebar::-webkit-scrollbar-thumb { background: var(--border-hot); border-radius: 3px; }
 
-#map-wrap { position: relative; height: 100%; }
+#map-wrap {
+  position: relative;
+  height: 100%;
+  /* Ocean deep color shows through transparent tile areas */
+  background: var(--ocean-deep);
+}
 
-#map { width: 100%; height: 100%; background: var(--bg-deep); }
+/* Ocean shimmer canvas — absolutely fills the map area, behind tiles */
+#ocean-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  pointer-events: none;
+}
 
-/* Push CartoDB tiles toward cooler, darker neutral. Subtle. */
+#map {
+  width: 100%;
+  height: 100%;
+  background: transparent;
+  position: relative;
+  z-index: 1;
+}
+
+/*
+  Tile filter strategy:
+  - Stadia Stamen Watercolor gives artistic painted land masses
+  - We push it toward near-black land with a heavy desaturate + darken
+  - The ocean areas in the tile become nearly transparent so our
+    canvas ocean shimmer shows through via mix-blend-mode
+*/
 .leaflet-tile-pane {
-  filter: brightness(0.62) saturate(0.55) contrast(1.05) hue-rotate(195deg);
+  filter:
+    brightness(0.28)
+    saturate(0.15)
+    contrast(1.4)
+    sepia(0.3)
+    hue-rotate(175deg);
+  mix-blend-mode: lighten;
+}
+
+/* Labels tile sits on top at better opacity */
+.leaflet-tile-pane .leaflet-layer:last-child {
+  filter: none;
+  opacity: 0.45;
 }
 
 /* ----- Brand ------------------------------------------------------------- */
@@ -106,7 +134,7 @@ a:hover { text-decoration: underline; text-underline-offset: 2px; }
   display: grid; place-items: center;
   color: var(--accent);
   flex-shrink: 0;
-  box-shadow: 0 0 12px rgba(0, 212, 255, 0.15);
+  box-shadow: 0 0 12px rgba(0, 212, 255, 0.12);
 }
 .brand-text h1 {
   font-size: 13px;
@@ -171,7 +199,7 @@ a:hover { text-decoration: underline; text-underline-offset: 2px; }
   position: absolute;
   left: 3px; top: 0px;
   width: 4px; height: 7px;
-  border: solid var(--bg-deep);
+  border: solid #050809;
   border-width: 0 1.5px 1.5px 0;
   transform: rotate(45deg);
 }
@@ -180,7 +208,7 @@ a:hover { text-decoration: underline; text-underline-offset: 2px; }
   width: 8px; height: 8px;
   border-radius: 50%;
   flex-shrink: 0;
-  box-shadow: 0 0 6px currentColor;
+  box-shadow: 0 0 5px currentColor;
 }
 .filter-row .label { flex: 1; font-size: 12px; color: var(--text); }
 .filter-row .count {
@@ -236,34 +264,22 @@ a:hover { text-decoration: underline; text-underline-offset: 2px; }
 .hud {
   position: absolute;
   z-index: 500;
-  background: rgba(11, 16, 24, 0.85);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  background: rgba(9, 14, 20, 0.88);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   border: 1px solid var(--border-hot);
   border-radius: 4px;
   padding: 14px 16px;
   color: var(--text);
   box-shadow:
-    0 4px 24px rgba(0, 0, 0, 0.5),
-    0 0 0 1px rgba(0, 212, 255, 0.04);
+    0 4px 32px rgba(0, 0, 0, 0.6),
+    0 0 0 1px rgba(0, 212, 255, 0.03);
 }
 
-.hud-top-right {
-  top: 16px;
-  right: 16px;
-  width: 244px;
-}
-.hud-bottom-left {
-  bottom: 20px;
-  left: 16px;
-  width: 256px;
-}
+.hud-top-right  { top: 16px; right: 16px; width: 244px; }
+.hud-bottom-left { bottom: 20px; left: 16px; width: 256px; }
 
-.hud-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
+.hud-header { display: flex; align-items: center; gap: 8px; }
 .hud-label {
   font-family: var(--mono);
   font-size: 10px;
@@ -278,10 +294,7 @@ a:hover { text-decoration: underline; text-underline-offset: 2px; }
   color: var(--text-dim);
   font-variant-numeric: tabular-nums;
 }
-.hud-divider {
-  border-top: 1px solid var(--border);
-  margin: 10px 0;
-}
+.hud-divider { border-top: 1px solid var(--border); margin: 10px 0; }
 .hud-section-title {
   font-size: 9px;
   text-transform: uppercase;
@@ -298,17 +311,16 @@ a:hover { text-decoration: underline; text-underline-offset: 2px; }
   letter-spacing: 0.02em;
 }
 
-/* Live pulsing dot */
+/* Live dot */
 .live-dot {
   width: 6px; height: 6px;
   background: var(--accent);
   border-radius: 50%;
-  box-shadow: 0 0 0 0 var(--accent-glow);
   animation: live-pulse 2s ease-in-out infinite;
 }
 @keyframes live-pulse {
   0%, 100% { box-shadow: 0 0 0 0 var(--accent-glow); opacity: 1; }
-  50%      { box-shadow: 0 0 0 6px transparent;       opacity: 0.6; }
+  50%       { box-shadow: 0 0 0 6px transparent;      opacity: 0.6; }
 }
 
 /* Big stat */
@@ -340,14 +352,7 @@ a:hover { text-decoration: underline; text-underline-offset: 2px; }
   padding: 4px 0;
   font-size: 11px;
 }
-.sev-row .sev-bar {
-  height: 6px;
-  border-radius: 1px;
-  background: linear-gradient(90deg, currentColor, transparent);
-  opacity: 0.85;
-}
 .sev-row .sev-label {
-  position: absolute;
   font-size: 10px;
   font-weight: 500;
   letter-spacing: 0.06em;
@@ -371,7 +376,7 @@ a:hover { text-decoration: underline; text-underline-offset: 2px; }
 .sev-row.is-active .sev-pip { animation: sev-active 2s ease-in-out infinite; }
 @keyframes sev-active {
   0%, 100% { transform: scale(1);   opacity: 1;   }
-  50%      { transform: scale(1.3); opacity: 0.7; }
+  50%       { transform: scale(1.3); opacity: 0.7; }
 }
 
 /* Category breakdown bars */
@@ -389,12 +394,11 @@ a:hover { text-decoration: underline; text-underline-offset: 2px; }
   background: var(--bg-input);
   border-radius: 1px;
   overflow: hidden;
-  position: relative;
 }
 .bd-fill {
   height: 100%;
   background: currentColor;
-  box-shadow: 0 0 6px currentColor;
+  box-shadow: 0 0 5px currentColor;
   transition: width 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 .bd-count {
@@ -411,11 +415,10 @@ a:hover { text-decoration: underline; text-underline-offset: 2px; }
    ========================================================================= */
 #sidebar-toggle {
   position: absolute;
-  top: 12px;
-  left: 12px;
+  top: 12px; left: 12px;
   z-index: 1000;
   display: none;
-  background: rgba(11, 16, 24, 0.9);
+  background: rgba(9, 14, 20, 0.92);
   color: var(--text);
   border: 1px solid var(--border-hot);
   border-radius: 4px;
@@ -429,31 +432,20 @@ a:hover { text-decoration: underline; text-underline-offset: 2px; }
    Popups
    ========================================================================= */
 .leaflet-popup-content-wrapper {
-  background: rgba(11, 16, 24, 0.95) !important;
+  background: rgba(9, 14, 20, 0.96) !important;
   color: var(--text);
   border: 1px solid var(--border-hot);
   border-radius: 4px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(8px);
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(10px);
 }
-.leaflet-popup-tip { background: rgba(11, 16, 24, 0.95) !important; }
+.leaflet-popup-tip { background: rgba(9, 14, 20, 0.96) !important; }
 .leaflet-popup-content { margin: 12px 14px; font-size: 12px; line-height: 1.5; }
 .leaflet-container a.leaflet-popup-close-button { color: var(--text-dim); }
 .leaflet-container a.leaflet-popup-close-button:hover { color: var(--text); }
 
-.popup-title {
-  font-weight: 600;
-  font-size: 13px;
-  margin-bottom: 8px;
-  color: var(--text);
-  letter-spacing: 0.01em;
-}
-.popup-badges {
-  display: flex;
-  gap: 4px;
-  flex-wrap: wrap;
-  margin-bottom: 10px;
-}
+.popup-title { font-weight: 600; font-size: 13px; margin-bottom: 8px; color: var(--text); letter-spacing: 0.01em; }
+.popup-badges { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 10px; }
 .badge {
   display: inline-block;
   padding: 2px 7px;
@@ -464,31 +456,11 @@ a:hover { text-decoration: underline; text-underline-offset: 2px; }
   text-transform: uppercase;
   font-family: var(--mono);
 }
-.popup-area {
-  color: var(--text-dim);
-  font-size: 11px;
-  margin-bottom: 6px;
-  font-family: var(--mono);
-  letter-spacing: 0.01em;
-}
-.popup-desc {
-  color: var(--text);
-  font-size: 12px;
-  max-height: 180px;
-  overflow-y: auto;
-  white-space: pre-wrap;
-  padding-right: 4px;
-}
+.popup-area { color: var(--text-dim); font-size: 11px; margin-bottom: 6px; font-family: var(--mono); letter-spacing: 0.01em; }
+.popup-desc { color: var(--text); font-size: 12px; max-height: 180px; overflow-y: auto; white-space: pre-wrap; padding-right: 4px; }
 .popup-desc::-webkit-scrollbar { width: 4px; }
 .popup-desc::-webkit-scrollbar-thumb { background: var(--border-hot); border-radius: 2px; }
-.popup-link {
-  display: inline-block;
-  margin-top: 10px;
-  font-size: 11px;
-  font-family: var(--mono);
-  letter-spacing: 0.06em;
-  color: var(--accent);
-}
+.popup-link { display: inline-block; margin-top: 10px; font-size: 11px; font-family: var(--mono); letter-spacing: 0.06em; color: var(--accent); }
 
 /* =========================================================================
    Cluster icons
@@ -496,17 +468,17 @@ a:hover { text-decoration: underline; text-underline-offset: 2px; }
 .marker-cluster-small,
 .marker-cluster-medium,
 .marker-cluster-large {
-  background: rgba(0, 212, 255, 0.12) !important;
+  background: rgba(0, 212, 255, 0.10) !important;
 }
 .marker-cluster-small div,
 .marker-cluster-medium div,
 .marker-cluster-large div {
   background: rgba(0, 212, 255, 0.7) !important;
-  color: #050709 !important;
+  color: #050809 !important;
   font-family: var(--mono);
   font-weight: 600;
   border: 1px solid var(--accent);
-  box-shadow: 0 0 12px var(--accent-glow);
+  box-shadow: 0 0 10px var(--accent-glow);
 }
 
 /* =========================================================================
@@ -519,20 +491,15 @@ a:hover { text-decoration: underline; text-underline-offset: 2px; }
 }
 .event-marker .core {
   position: absolute;
-  inset: 0;
-  margin: auto;
   width: 8px; height: 8px;
   border-radius: 50%;
   background: var(--cat, var(--accent));
-  border: 1px solid var(--bg-deep);
-  box-shadow: 0 0 4px currentColor;
+  border: 1px solid #050809;
   top: 50%; left: 50%;
   transform: translate(-50%, -50%);
 }
 .event-marker .ring {
   position: absolute;
-  inset: 0;
-  margin: auto;
   border-radius: 50%;
   border: 1px solid var(--cat, var(--accent));
   opacity: 0;
@@ -540,37 +507,22 @@ a:hover { text-decoration: underline; text-underline-offset: 2px; }
   transform: translate(-50%, -50%);
 }
 
-/* Tier MODERATE / MINOR / UNKNOWN — static */
 .event-marker.tier-minor .core,
 .event-marker.tier-unknown .core { width: 6px; height: 6px; opacity: 0.75; }
 .event-marker.tier-moderate .core { width: 8px; height: 8px; }
 
-/* Tier SEVERE — single slow pulse ring */
 .event-marker.tier-severe .core { width: 9px; height: 9px; }
-.event-marker.tier-severe .ring {
-  width: 14px; height: 14px;
-  animation: ring-pulse 3.4s ease-out infinite;
-}
+.event-marker.tier-severe .ring { width: 14px; height: 14px; animation: ring-pulse 3.4s ease-out infinite; }
 
-/* Tier EXTREME — slow breathe + double pulse ring */
 .event-marker.tier-extreme .core {
   width: 10px; height: 10px;
   animation: core-breathe 3.6s ease-in-out infinite;
   box-shadow: 0 0 8px currentColor, 0 0 14px currentColor;
 }
-.event-marker.tier-extreme .ring {
-  width: 14px; height: 14px;
-  animation: ring-pulse 3.6s ease-out infinite;
-}
-.event-marker.tier-extreme .ring.ring-2 {
-  animation-delay: 1.8s;
-}
+.event-marker.tier-extreme .ring { width: 14px; height: 14px; animation: ring-pulse 3.6s ease-out infinite; }
+.event-marker.tier-extreme .ring.ring-2 { animation-delay: 1.8s; }
 
-/* Earthquake size override scales with magnitude (set inline via --size) */
-.event-marker.is-quake .core {
-  width: var(--size, 8px);
-  height: var(--size, 8px);
-}
+.event-marker.is-quake .core { width: var(--size, 8px); height: var(--size, 8px); }
 
 @keyframes ring-pulse {
   0%   { transform: translate(-50%, -50%) scale(0.6); opacity: 0.65; }
@@ -579,26 +531,23 @@ a:hover { text-decoration: underline; text-underline-offset: 2px; }
 }
 @keyframes core-breathe {
   0%, 100% { transform: translate(-50%, -50%) scale(1);    }
-  50%      { transform: translate(-50%, -50%) scale(1.18); }
+  50%       { transform: translate(-50%, -50%) scale(1.18); }
 }
 
 /* =========================================================================
-   Polygon "marching ants" for Severe+ alerts
+   Polygon marching ants
    ========================================================================= */
 .poly-severe,
 .poly-extreme {
   stroke-dasharray: 6 4;
   animation: marching 14s linear infinite;
 }
-.poly-extreme {
-  animation-duration: 8s;
-  filter: drop-shadow(0 0 4px currentColor);
-}
-@keyframes marching {
-  to { stroke-dashoffset: -200; }
-}
+.poly-extreme { animation-duration: 8s; filter: drop-shadow(0 0 4px currentColor); }
+@keyframes marching { to { stroke-dashoffset: -200; } }
 
-/* Respect reduced-motion */
+/* =========================================================================
+   Reduced motion
+   ========================================================================= */
 @media (prefers-reduced-motion: reduce) {
   .live-dot,
   .event-marker .ring,
@@ -608,6 +557,7 @@ a:hover { text-decoration: underline; text-underline-offset: 2px; }
   .sev-row.is-active .sev-pip {
     animation: none !important;
   }
+  #ocean-canvas { display: none; }
 }
 
 /* =========================================================================
@@ -618,21 +568,18 @@ a:hover { text-decoration: underline; text-underline-offset: 2px; }
   #sidebar {
     position: absolute;
     top: 0; left: 0; bottom: 0;
-    width: 86%;
-    max-width: 300px;
+    width: 86%; max-width: 300px;
     z-index: 1100;
     transform: translateX(-100%);
     transition: transform 0.25s ease;
-    box-shadow: 6px 0 24px rgba(0, 0, 0, 0.55);
+    box-shadow: 6px 0 24px rgba(0, 0, 0, 0.6);
   }
   #sidebar.open { transform: translateX(0); }
   #sidebar-toggle { display: block; }
-
   .hud-top-right { width: 220px; padding: 12px; top: 12px; right: 12px; }
   .hud-bottom-left { width: 240px; padding: 12px; bottom: 12px; left: 12px; }
   .big-stat-value { font-size: 26px; }
 }
-
 @media (max-width: 560px) {
   .hud-bottom-left { display: none; }
   .hud-top-right { width: 180px; }

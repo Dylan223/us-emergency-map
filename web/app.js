@@ -1,12 +1,10 @@
-// =========================================================================
-// U.S. Emergency Map  ·  v2
-// Loads web/data/events.geojson and renders an interactive HUD-style map.
-// =========================================================================
+// U.S. Emergency Map  ·  v3
+// Artistic tile style: near-black land, animated cyan ocean
 
 const DATA_URL = "data/events.geojson";
 
 // --------------------------------------------------------------------------
-// Palette — keep these in sync with style.css custom properties.
+// Palette
 // --------------------------------------------------------------------------
 const CATEGORY_META = {
   tornado:      { color: "#ff4d6d", label: "Tornado",        short: "Tornado"  },
@@ -52,24 +50,50 @@ const map = L.map("map", {
   zoomControl: false,
   attributionControl: false,
 });
+
 L.control.zoom({ position: "bottomright" }).addTo(map);
 L.control.attribution({ position: "bottomright", prefix: false })
   .addAttribution(
-    '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>' +
-    ' &copy; <a href="https://carto.com/attributions">CARTO</a>'
+    '&copy; <a href="https://stamen.com">Stamen Design</a>' +
+    ' &copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>'
   )
   .addTo(map);
 
+// --------------------------------------------------------------------------
+// Tile layers — artistic style
+//
+// Layer 1 (base): Stadia Stamen Toner — high-contrast black land / white sea.
+//   CSS then crushes brightness + desaturates so land → near-black,
+//   sea → near-transparent so the canvas ocean shows through.
+//
+// Layer 2 (labels): Toner Labels only, at reduced opacity.
+// --------------------------------------------------------------------------
+
+// Base: Stamen Toner (black land, white sea — perfect for our CSS filter trick)
 L.tileLayer(
-  "https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png",
-  { subdomains: "abcd", maxZoom: 19 }
+  "https://tiles.stadiamaps.com/tiles/stamen_toner/{z}/{x}/{y}{r}.png",
+  {
+    subdomains: "abcd",
+    maxZoom: 20,
+    opacity: 1,
+    // className targets this layer's canvas specifically in newer Leaflet
+    className: "tile-base",
+  }
 ).addTo(map);
+
+// Labels only — sits on top, slightly transparent
 L.tileLayer(
-  "https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png",
-  { subdomains: "abcd", maxZoom: 19, opacity: 0.6 }
+  "https://tiles.stadiamaps.com/tiles/stamen_toner_labels/{z}/{x}/{y}{r}.png",
+  {
+    subdomains: "abcd",
+    maxZoom: 20,
+    opacity: 0.35,
+    className: "tile-labels",
+  }
 ).addTo(map);
 
 state.layers.polygons = L.layerGroup().addTo(map);
+
 state.layers.points = L.markerClusterGroup({
   disableClusteringAtZoom: 8,
   spiderfyOnMaxZoom: true,
@@ -112,13 +136,12 @@ setInterval(updateClock, 1000);
 updateClock();
 
 // --------------------------------------------------------------------------
-// Filter UI (left sidebar)
+// Filter UI
 // --------------------------------------------------------------------------
 function buildFilters() {
   const catCounts = countBy(state.features, (f) => f.properties.category);
   const sevCounts = countBy(state.features, (f) => f.properties.severity);
 
-  // Categories
   const catContainer = document.getElementById("category-filters");
   catContainer.innerHTML = "";
   Object.entries(catCounts)
@@ -136,7 +159,6 @@ function buildFilters() {
       );
     });
 
-  // Severities
   const sevContainer = document.getElementById("severity-filters");
   sevContainer.innerHTML = "";
   SEVERITY_ORDER.forEach((sev) => {
@@ -170,7 +192,7 @@ function filterRow({ key, color, label, count, set }) {
   const dot = document.createElement("span");
   dot.className = "dot";
   dot.style.background = color;
-  dot.style.color = color;  // for the box-shadow currentColor glow
+  dot.style.color = color;
 
   const labelEl = document.createElement("span");
   labelEl.className = "label";
@@ -211,7 +233,6 @@ function addFeature(feat) {
   const cat = CATEGORY_META[p.category] || { color: "#94a3b8" };
   const geom = feat.geometry;
 
-  // Polygon outline (with marching-ants for Severe+).
   if (geom && (geom.type === "Polygon" || geom.type === "MultiPolygon")) {
     const cls =
       p.severity === "extreme" ? "poly-extreme" :
@@ -230,7 +251,6 @@ function addFeature(feat) {
     state.layers.polygons.addLayer(poly);
   }
 
-  // Representative-point marker.
   const rep = p.rep_point || (geom.type === "Point" ? geom.coordinates : null);
   if (!rep) return;
   const [lng, lat] = rep;
@@ -250,12 +270,7 @@ function addFeature(feat) {
       <span class="core"></span>
     </div>
   `;
-  const icon = L.divIcon({
-    html,
-    className: "",
-    iconSize: [24, 24],
-    iconAnchor: [12, 12],
-  });
+  const icon = L.divIcon({ html, className: "", iconSize: [24, 24], iconAnchor: [12, 12] });
   const marker = L.marker([lat, lng], { icon, riseOnHover: true });
   marker.bindPopup(() => popupHtml(p), { maxWidth: 360 });
   state.layers.points.addLayer(marker);
@@ -266,8 +281,6 @@ function addFeature(feat) {
 // --------------------------------------------------------------------------
 function updateSeverityLadder(features) {
   const counts = countBy(features, (f) => f.properties.severity);
-  const total = features.length || 1;
-
   const container = document.getElementById("severity-ladder");
   container.innerHTML = "";
 
@@ -279,7 +292,7 @@ function updateSeverityLadder(features) {
   for (const sev of SEVERITY_ORDER) {
     const meta = SEVERITY_META[sev];
     const count = counts[sev] || 0;
-    if (count === 0 && sev !== highestActive) continue; // hide empties
+    if (count === 0 && sev !== highestActive) continue;
 
     const row = document.createElement("div");
     row.className = "sev-row";
@@ -340,7 +353,7 @@ function popupHtml(p) {
     <div class="popup-badges">
       <span class="badge" style="background:${catMeta.color}26;color:${catMeta.color};">${escapeHtml(catMeta.label)}</span>
       <span class="badge" style="background:${sevMeta.color}26;color:${sevMeta.color};">${escapeHtml(sevMeta.label)}</span>
-      <span class="badge" style="background:#1f2937;color:#b1bccc;">${escapeHtml(p.source || "")}</span>
+      <span class="badge" style="background:#1a2330;color:#8a9bab;">${escapeHtml(p.source || "")}</span>
     </div>
     ${p.area ? `<div class="popup-area">${escapeHtml(p.area)}</div>` : ""}
     ${time ? `<div class="popup-area">Started ${escapeHtml(time)}</div>` : ""}
@@ -367,9 +380,7 @@ function escapeHtml(s) {
     "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
   })[c]);
 }
-function escapeAttr(s) {
-  return escapeHtml(s).replace(/javascript:/gi, "");
-}
+function escapeAttr(s) { return escapeHtml(s).replace(/javascript:/gi, ""); }
 
 function updateLastUpdated() {
   const el = document.getElementById("last-updated");
@@ -391,14 +402,10 @@ function updateClock() {
   const d = new Date();
   const hh = String(d.getHours()).padStart(2, "0");
   const mm = String(d.getMinutes()).padStart(2, "0");
-  const tz = (d.toLocaleTimeString("en-US", { timeZoneName: "short" })
-              .split(" ").pop() || "").slice(0, 4);
+  const tz = (d.toLocaleTimeString("en-US", { timeZoneName: "short" }).split(" ").pop() || "").slice(0, 4);
   el.textContent = `${hh}:${mm} ${tz}`;
 }
 
-// --------------------------------------------------------------------------
-// Sidebar toggle (mobile) + auto repo link
-// --------------------------------------------------------------------------
 document.getElementById("sidebar-toggle").addEventListener("click", () => {
   document.getElementById("sidebar").classList.toggle("open");
 });
