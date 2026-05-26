@@ -1,5 +1,5 @@
-// U.S. Emergency Map  ·  v4
-// CartoDB Dark Matter tiles (no API key needed) + CSS animated ocean bg
+// U.S. Emergency Map  ·  v5  (fixed)
+// CARTO Dark Matter tiles (no API key) + animated ocean canvas behind the map.
 
 const DATA_URL = "data/events.geojson";
 
@@ -34,7 +34,8 @@ const state = {
 };
 
 // --------------------------------------------------------------------------
-// Map — CartoDB Dark Matter, no API key required
+// Map — CARTO Dark Matter (no API key)
+// Map container background is transparent so the ocean canvas behind shows.
 // --------------------------------------------------------------------------
 const map = L.map("map", {
   center: [39.5, -98.5],
@@ -43,8 +44,6 @@ const map = L.map("map", {
   worldCopyJump: true,
   zoomControl: false,
   attributionControl: false,
-  // Set map background to our ocean color so it shows between tiles
-  backgroundColor: "#03111a",
 });
 
 L.control.zoom({ position: "bottomright" }).addTo(map);
@@ -52,16 +51,16 @@ L.control.attribution({ position: "bottomright", prefix: false })
   .addAttribution('&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/attributions">CARTO</a>')
   .addTo(map);
 
-// CartoDB Dark Matter — dark land, slightly lighter sea. Free, no key needed.
+// CARTO Dark Matter — proven to work without a key. Land tiles.
 L.tileLayer(
   "https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png",
-  { subdomains: "abcd", maxZoom: 19 }
+  { subdomains: "abcd", maxZoom: 19, className: "tile-land" }
 ).addTo(map);
 
-// Labels on top at reduced opacity
+// City / country labels on top
 L.tileLayer(
   "https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png",
-  { subdomains: "abcd", maxZoom: 19, opacity: 0.55 }
+  { subdomains: "abcd", maxZoom: 19, opacity: 0.55, className: "tile-labels" }
 ).addTo(map);
 
 state.layers.polygons = L.layerGroup().addTo(map);

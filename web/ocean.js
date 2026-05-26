@@ -1,6 +1,8 @@
-// ocean.js — animated cyan/teal ocean shimmer canvas
-// Renders behind the Leaflet tile pane using mix-blend-mode: lighten
-// so it only shows through the (near-transparent after filter) ocean areas.
+// ocean.js
+// Animated cyan ocean glow that sits behind the map tiles.
+// The land tiles (CARTO Dark Matter) blend over the top with
+// mix-blend-mode: screen, so the canvas brightness only shows
+// in the darker ocean pixels, not the pure-black land.
 
 (function () {
   "use strict";
@@ -9,113 +11,86 @@
   if (!canvas) return;
 
   const ctx = canvas.getContext("2d");
-  let W, H, t = 0;
+  let W = 0, H = 0;
 
-  // Wave layers — each has its own speed, amplitude, wavelength, opacity
-  const WAVES = [
-    { speed: 0.00018, amp: 0.008, freq: 3.1,  phase: 0,    alpha: 0.045, color: [0, 180, 220] },
-    { speed: 0.00024, amp: 0.005, freq: 5.7,  phase: 1.2,  alpha: 0.035, color: [0, 212, 255] },
-    { speed: 0.00013, amp: 0.012, freq: 2.0,  phase: 2.5,  alpha: 0.030, color: [0, 150, 200] },
-    { speed: 0.00031, amp: 0.003, freq: 9.4,  phase: 0.8,  alpha: 0.025, color: [80, 220, 255] },
-    { speed: 0.00010, amp: 0.018, freq: 1.3,  phase: 3.8,  alpha: 0.020, color: [0, 100, 160] },
+  // 4 large soft "glow" blobs that drift in figure-8 paths.
+  // Each is a radial gradient — when summed they create gently moving
+  // patches of brighter cyan across the whole map.
+  const BLOBS = [
+    { cx: 0.20, cy: 0.30, r: 0.55, speed: 0.000045, phase: 0.0,  hue: [10,  150, 195] },
+    { cx: 0.75, cy: 0.40, r: 0.50, speed: 0.000055, phase: 1.7,  hue: [25,  175, 220] },
+    { cx: 0.50, cy: 0.75, r: 0.60, speed: 0.000035, phase: 3.1,  hue: [5,   120, 175] },
+    { cx: 0.85, cy: 0.20, r: 0.45, speed: 0.000065, phase: 4.6,  hue: [40,  200, 240] },
   ];
 
-  // Subtle sparkle points
-  const SPARKLES = Array.from({ length: 120 }, () => ({
+  // Sparkle highlights — small bright dots, sparse, slow flicker.
+  const SPARKLES = Array.from({ length: 90 }, () => ({
     x: Math.random(),
     y: Math.random(),
-    r: 0.4 + Math.random() * 1.2,
-    speed: 0.0004 + Math.random() * 0.0012,
+    r: 0.5 + Math.random() * 1.4,
+    speed: 0.0005 + Math.random() * 0.0015,
     phase: Math.random() * Math.PI * 2,
-    alpha: 0.05 + Math.random() * 0.18,
+    alpha: 0.08 + Math.random() * 0.20,
   }));
 
   function resize() {
     const wrap = canvas.parentElement;
-    W = canvas.width  = wrap.offsetWidth;
-    H = canvas.height = wrap.offsetHeight;
+    if (!wrap) return;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    W = wrap.offsetWidth;
+    H = wrap.offsetHeight;
+    canvas.style.width = W + "px";
+    canvas.style.height = H + "px";
+    canvas.width  = Math.round(W * dpr);
+    canvas.height = Math.round(H * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
 
-  function drawFrame(ts) {
-    t = ts;
-    ctx.clearRect(0, 0, W, H);
-
-    // Deep ocean base gradient — very dark, almost invisible under land tiles
-    const grad = ctx.createLinearGradient(0, 0, 0, H);
-    grad.addColorStop(0,   "rgba(2, 12, 22, 0.92)");
-    grad.addColorStop(0.5, "rgba(3, 18, 30, 0.88)");
-    grad.addColorStop(1,   "rgba(1,  8, 16, 0.95)");
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, W, H);
-
-    // Animated wave bands — horizontal sine strips
-    for (const wave of WAVES) {
-      const [r, g, b] = wave.color;
-      const phaseOffset = t * wave.speed + wave.phase;
-      const stripH = H * 0.015; // height of each sine strip
-
-      ctx.save();
-      ctx.globalAlpha = wave.alpha;
-
-      // Draw multiple sine-displaced horizontal lines across the canvas
-      const lineCount = Math.ceil(H / (stripH * 3));
-      for (let i = 0; i < lineCount; i++) {
-        const baseY = (i / lineCount) * H;
-        ctx.beginPath();
-
-        for (let x = 0; x <= W; x += 3) {
-          const nx = x / W;
-          // Two overlapping sines for organic feel
-          const y = baseY
-            + Math.sin(nx * wave.freq * Math.PI * 2 + phaseOffset) * H * wave.amp
-            + Math.sin(nx * wave.freq * 0.61 * Math.PI * 2 + phaseOffset * 1.3) * H * wave.amp * 0.4;
-
-          if (x === 0) ctx.moveTo(x, y);
-          else ctx.lineTo(x, y);
-        }
-        // Close into a thin filled band
-        ctx.lineTo(W, baseY + stripH);
-        ctx.lineTo(0, baseY + stripH);
-        ctx.closePath();
-        ctx.fillStyle = `rgb(${r},${g},${b})`;
-        ctx.fill();
-      }
-      ctx.restore();
+  function drawFrame(t) {
+    if (W === 0 || H === 0) {
+      requestAnimationFrame(drawFrame);
+      return;
     }
 
-    // Sparkle glints — tiny bright dots that pulse
+    // Base ocean color — deep teal/cyan. This is what shows everywhere
+    // the tiles haven't loaded, AND is what "screen" blends with the
+    // dark ocean tile pixels.
+    ctx.fillStyle = "#04243a";
+    ctx.fillRect(0, 0, W, H);
+
+    // Drifting glow blobs — each follows a slow elliptical path.
+    for (const b of BLOBS) {
+      const a = t * b.speed + b.phase;
+      const driftX = Math.sin(a) * 0.10;
+      const driftY = Math.cos(a * 0.7) * 0.08;
+      const cx = (b.cx + driftX) * W;
+      const cy = (b.cy + driftY) * H;
+      const radius = b.r * Math.min(W, H);
+
+      const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius);
+      const [r, g, bl] = b.hue;
+      grad.addColorStop(0,    `rgba(${r}, ${g}, ${bl}, 0.55)`);
+      grad.addColorStop(0.4,  `rgba(${r}, ${g}, ${bl}, 0.22)`);
+      grad.addColorStop(1,    `rgba(${r}, ${g}, ${bl}, 0)`);
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, W, H);
+    }
+
+    // Sparkle glints — tiny bright dots flickering. Adds subtle motion
+    // even in calm patches of the map.
     for (const sp of SPARKLES) {
-      const px = sp.x * W;
-      const py = sp.y * H
-        + Math.sin(t * sp.speed * 0.7 + sp.phase) * H * 0.006
-        + Math.sin(t * 0.00008 + sp.phase * 2.1) * H * 0.004;
-
-      const pulse = 0.5 + 0.5 * Math.sin(t * sp.speed * 6 + sp.phase);
-      const alpha = sp.alpha * pulse;
-
-      ctx.save();
-      ctx.globalAlpha = alpha;
-      ctx.fillStyle = "#a0eeff";
+      const pulse = 0.5 + 0.5 * Math.sin(t * sp.speed * 4 + sp.phase);
+      if (pulse < 0.4) continue; // skip when dim, saves draws
+      const drift = Math.sin(t * sp.speed * 0.6 + sp.phase) * 6;
+      ctx.fillStyle = `rgba(160, 230, 255, ${sp.alpha * pulse})`;
       ctx.beginPath();
-      ctx.arc(px, py, sp.r * pulse, 0, Math.PI * 2);
+      ctx.arc(sp.x * W, sp.y * H + drift, sp.r * pulse, 0, Math.PI * 2);
       ctx.fill();
-      ctx.restore();
     }
-
-    // Subtle vignette — darkens edges so the glow feels "open water"
-    const vig = ctx.createRadialGradient(W / 2, H / 2, H * 0.2, W / 2, H / 2, H * 0.85);
-    vig.addColorStop(0, "rgba(0,0,0,0)");
-    vig.addColorStop(1, "rgba(0,0,0,0.45)");
-    ctx.save();
-    ctx.globalAlpha = 1;
-    ctx.fillStyle = vig;
-    ctx.fillRect(0, 0, W, H);
-    ctx.restore();
 
     requestAnimationFrame(drawFrame);
   }
 
-  // Boot
   resize();
   window.addEventListener("resize", resize);
   requestAnimationFrame(drawFrame);
