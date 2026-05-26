@@ -1,0 +1,226 @@
+/* ----- Reset / base ----- */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body, #app { height: 100%; width: 100%; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+               "Helvetica Neue", Arial, sans-serif;
+  color: #e6e8eb;
+  background: #0e1117;
+  font-size: 14px;
+  line-height: 1.5;
+  overflow: hidden;
+}
+
+a { color: #6ea8fe; text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* ----- Layout ----- */
+#app {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  height: 100vh;
+}
+
+#sidebar {
+  background: #131820;
+  border-right: 1px solid #232a36;
+  overflow-y: auto;
+  padding: 20px 18px;
+}
+
+#map-wrap {
+  position: relative;
+  height: 100%;
+}
+
+#map {
+  width: 100%;
+  height: 100%;
+  background: #0e1117;
+}
+
+/* ----- Sidebar content ----- */
+#sidebar header h1 {
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.subtitle {
+  color: #8a94a6;
+  font-size: 12px;
+  margin-top: 2px;
+}
+
+.meta {
+  color: #b1bccc;
+  font-size: 12px;
+  margin-top: 10px;
+  padding: 8px 10px;
+  background: #1a212c;
+  border-radius: 6px;
+}
+
+.meta #event-count { color: #fff; font-weight: 600; }
+
+.panel { margin-top: 20px; }
+
+.panel h2 {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #8a94a6;
+  margin-bottom: 8px;
+}
+
+.filter-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.filter-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: 5px;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.12s;
+}
+.filter-row:hover { background: #1a212c; }
+
+.filter-row input[type="checkbox"] {
+  accent-color: #4f8bf9;
+  cursor: pointer;
+}
+
+.filter-row .dot {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.filter-row .label {
+  flex: 1;
+  font-size: 13px;
+  color: #d6dae2;
+}
+
+.filter-row .count {
+  font-size: 11px;
+  color: #8a94a6;
+  font-variant-numeric: tabular-nums;
+}
+
+.sources { list-style: none; font-size: 12px; color: #b1bccc; }
+.sources li { padding: 3px 0; }
+
+#sidebar footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid #232a36;
+  font-size: 11px;
+  color: #8a94a6;
+}
+#sidebar footer p + p { margin-top: 8px; }
+
+/* ----- Sidebar toggle (mobile) ----- */
+#sidebar-toggle {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 1000;
+  display: none;
+  background: #131820;
+  color: #fff;
+  border: 1px solid #232a36;
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 18px;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+}
+
+/* ----- Popups ----- */
+.leaflet-popup-content-wrapper {
+  background: #131820;
+  color: #e6e8eb;
+  border-radius: 8px;
+  box-shadow: 0 6px 24px rgba(0,0,0,0.5);
+}
+.leaflet-popup-tip { background: #131820; }
+.leaflet-popup-content { margin: 14px 16px; font-size: 13px; line-height: 1.5; }
+
+.popup-title {
+  font-weight: 600;
+  font-size: 14px;
+  margin-bottom: 6px;
+  color: #fff;
+}
+.popup-badges {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+.popup-area {
+  color: #b1bccc;
+  font-size: 12px;
+  margin-bottom: 8px;
+}
+.popup-desc {
+  color: #d6dae2;
+  font-size: 12px;
+  max-height: 200px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+}
+.popup-link {
+  display: inline-block;
+  margin-top: 10px;
+  font-size: 12px;
+}
+
+/* ----- Cluster markers ----- */
+.marker-cluster-small,
+.marker-cluster-medium,
+.marker-cluster-large {
+  background: rgba(79, 139, 249, 0.2);
+}
+.marker-cluster-small div,
+.marker-cluster-medium div,
+.marker-cluster-large div {
+  background: rgba(79, 139, 249, 0.85);
+  color: #fff;
+  font-weight: 600;
+}
+
+/* ----- Mobile ----- */
+@media (max-width: 768px) {
+  #app { grid-template-columns: 1fr; }
+  #sidebar {
+    position: absolute;
+    top: 0; left: 0; bottom: 0;
+    width: 85%;
+    max-width: 320px;
+    z-index: 999;
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+    box-shadow: 4px 0 18px rgba(0,0,0,0.5);
+  }
+  #sidebar.open { transform: translateX(0); }
+  #sidebar-toggle { display: block; }
+}
