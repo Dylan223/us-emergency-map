@@ -9,7 +9,7 @@ frontend.
 > data that's scattered across a dozen government portals and put it on one
 > map where students, journalists, and citizens can actually use it.
 
-**Live demo:** _add your GitHub Pages URL here once deployed_
+**Live demo:** https://dylan223.github.io/us-emergency-map/
 
 ---
 
