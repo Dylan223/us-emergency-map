@@ -4,15 +4,15 @@
 const DATA_URL = "data/events.geojson";
 
 const CATEGORY_META = {
-  tornado:      { color: "#ff4d6d", label: "Tornado",        short: "Tornado"  },
-  hurricane:    { color: "#c084fc", label: "Hurricane",      short: "Tropical" },
-  severe_storm: { color: "#fbbf24", label: "Severe storm",   short: "Severe"   },
-  flood:        { color: "#00d4ff", label: "Flood",          short: "Flood"    },
-  fire_weather: { color: "#fb923c", label: "Fire weather",   short: "Fire"     },
-  winter:       { color: "#93c5fd", label: "Winter",         short: "Winter"   },
-  heat:         { color: "#f87171", label: "Heat",           short: "Heat"     },
-  weather:      { color: "#94a3b8", label: "Other weather",  short: "Other"    },
-  earthquake:   { color: "#34d399", label: "Earthquake",     short: "Quake"    },
+  tornado:      { color: "#ef4444", label: "Tornado",        short: "Tornado"  }, // vivid red
+  hurricane:    { color: "#8b5cf6", label: "Hurricane",      short: "Tropical" },
+  severe_storm: { color: "#f59e0b", label: "Severe storm",   short: "Severe"   }, // amber
+  flood:        { color: "#0ea5e9", label: "Flood",          short: "Flood"    }, // blue
+  fire_weather: { color: "#f97316", label: "Fire weather",   short: "Fire"     }, // orange
+  winter:       { color: "#60a5fa", label: "Winter",         short: "Winter"   }, // icy blue
+  heat:         { color: "#dc2626", label: "Heat",           short: "Heat"     }, // dark red
+  weather:      { color: "#64748b", label: "Other weather",  short: "Other"    }, // slate
+  earthquake:   { color: "#10b981", label: "Earthquake",     short: "Quake"    }, // emerald
 };
 
 const SEVERITY_META = {
